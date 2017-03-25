@@ -1,0 +1,198 @@
+*****************************************************************************
+VCbridge full installation instructions
+*****************************************************************************
+
+Follow these instructions to install VCbridge unto a Raspberry Pi
+
+*****************************************************************************
+STEP 1: Install Jessie Lite unto the SD card
+*****************************************************************************
+
+Go to this page and download Raspbian Jessie Lite:
+
+https://www.raspberrypi.org/downloads/raspbian/
+
+Then follow the instructions here to write to SD:
+
+https://www.raspberrypi.org/documentation/installation/installing-images/README.md
+
+Default logon:
+user: pi
+pass: raspberry
+
+Upgrade Jessie Lite to the latest version:
+$ sudo apt-get update
+$ sudo apt-get upgrade
+
+*****************************************************************************
+STEP 2: Install VCbridge
+*****************************************************************************
+
+1) Change the UART clock to communicate at 32150 bit/s
+
+$ sudo nano /boot/config.txt
+
+Add these lines to the bottom of config.txt file:
+=============================================================================
+init_uart_clock=2441406
+init_uart_baud=38400
+dtparam=uart0_clkrate=3000000
+enable_uart=1
+=============================================================================
+
+2) Disable the pi's shell from accesing the UART
+
+$ sudo nano /boot/cmdline.txt
+Removed console=serial0,115200
+
+Entire line reads: dwc_otg.lpm_enable=0 bcm2708.uart_clock=3000000 console=tty1 root=/dev/mmcblk0p2 rootfstype=ext4 elevator=deadline fsck.repair=yes rootwait
+
+Stop and disable the tty on UART service:
+
+$ sudo systemctl stop serial-getty@ttyAMA0.service
+$ sudo systemctl disable serial-getty@ttyAMA0.service
+
+$ sudo systemctl stop serial-getty@ttyS0.service
+$ sudo systemctl disable serial-getty@ttyS0.service
+
+Install needed packages:
+$ sudo apt-get install libasound2
+$ apt-get install git 
+$ apt-get install g++
+
+Install VCbridge
+$ git clone https://github.com/sixeight7/VCbridge.git
+$ cd VCbridge
+$ make
+$ sudo make install
+
+*****************************************************************************
+STEP 3: Create a startup script for midi:
+*****************************************************************************
+
+$ sudo nano /etc/init.d/midi_setup
+
+Add the lines:
+=============================================================================
+#!/bin/sh
+
+# make disk read only if previously writable
+mount / -o remount,ro
+
+# Start VCbridge with default settings
+/usr/local/bin/VCbridge &
+
+# Make the midi connections
+/usr/local/bin/connect_midi
+exit 0
+=============================================================================
+
+Make it executable:
+$ sudo chmod +x /etc/init.d/midi_setup
+
+Build a new script for connecting the pi:
+$ sudo nano /usr/local/bin/connect_midi
+
+Add the lines±
+=============================================================================
+#! /bin/sh
+#Remote current connections
+aconnect -x
+
+#connect 1st device to VCbridge port 0
+aconnect 128:0 20:0
+aconnect 20:0 128:0
+
+#connect 2nd device to VCbridge port 1
+aconnect 128:1 24:0
+aconnect 24:0 128:1
+
+#connect 3rd device to VCbridge port 2
+aconnect 128:2 28:0
+aconnect 28:0 128:2
+
+#connect 4th device to VCbridge port 3
+aconnect 128:3 32:0
+aconnect 32:0 128:3
+=============================================================================
+
+Make it executable:
+$ sudo chmod 755 /usr/local/bin/connect_midi
+
+Add it to the start up process±
+$ sudo update-rc.d midi_setup defaults
+
+Ignore the warning about missing LSB tags and overrides.
+
+*****************************************************************************
+STEP 4: Make the midi connections reconnect when plugging in and out the usb:
+*****************************************************************************
+
+First run lsusb to identify your device. Example:
+
+$lsusb
+
+Bus 004 Device 001: ID 0000:0000
+Bus 003 Device 001: ID 040a:0576 Kodak Co.
+Bus 002 Device 001: ID 0000:0000
+Bus 001 Device 001: ID 0000:0000
+
+After doing this you know that 
+- the vendor ID of your device is 040a
+- the product ID of your device is 0576 
+
+Now is time to create your UDEV rule.
+We only add the vendor ID, so all devices of this vendor will connect!
+So we only need one rule and all Boss and Roland devices will connect!
+
+$ sudo nano /etc/udev/rules.d/68-midi_connect.rules
+
+And add the lines:
+=============================================================================
+#Run script on connection of all Roland USB devices
+ACTION=="add", ATTRS{idVendor}=="0582", RUN+="/usr/local/bin/connect_midi"
+
+#Run script on connection of all ZOOM USB devices
+ACTION=="add", ATTRS{idVendor}=="1686", RUN+="/usr/local/bin/connect_midi"
+
+5. Change owner and reload udevadm±
+$ sudo chown root:root /etc/udev/rules.d/68-midi_connect.rules
+$ sudo udevadm control --reload
+=============================================================================
+
+*****************************************************************************
+STEP 5: Make the filesystem readonly to avoid corruption
+*****************************************************************************
+
+$ sudo nano /etc/fstab
+
+change the 4th parameter to 'ro' as below:
+
+proc               /proc      proc      defaults    0       0
+/dev/mmcblk0p1     /boot      vfat      ro          0       2
+/dev/mmcblk0p2     /          ext4      ro          0       1
+
+We need a scipt to type quit to make the pi R/W
+
+Make script:
+$ sudo nano /usr/local/bin/quit
+
+It contains the following lines:
+=============================================================================
+#! /bin/sh
+
+sudo mount / -o remount,rw
+
+echo
+echo "Disk sytem is now R/W -  do not power off - USE 'sudo shutdown -h now'"
+=============================================================================
+
+So every time you need to edit something on the RPi, you first type:
+
+$ quit
+
+Now you do need to shutdown or reboot the system properly after the edit:
+
+$ sudo shutdown now
+
+$ sudo reboot now
