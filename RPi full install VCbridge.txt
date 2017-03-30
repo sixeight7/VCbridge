@@ -70,10 +70,11 @@ $ sudo make install
 STEP 3: Create a startup script for midi:
 *****************************************************************************
 
-$ sudo nano /etc/rc.local
+$ sudo nano /etc/init.d/midi_setup
 
 Add the lines:
 =============================================================================
+#!/bin/bash
 
 # Start VCbridge with default settings
 /usr/local/bin/VCbridge &
@@ -84,6 +85,11 @@ Add the lines:
 exit 0
 =============================================================================
 
+Make it executable:
+$ sudo chmod +x /etc/init.d/midi_setup
+
+Add it to the start up process±
+$ sudo update-rc.d midi_setup defaults
 
 Build a new script for connecting the pi:
 $ sudo nano /usr/local/bin/connect_midi
