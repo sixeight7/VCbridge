@@ -70,25 +70,20 @@ $ sudo make install
 STEP 3: Create a startup script for midi:
 *****************************************************************************
 
-$ sudo nano /etc/init.d/midi_setup
+$ sudo nano /etc/rc.local
 
 Add the lines:
 =============================================================================
-#!/bin/sh
-
-# make disk read only if previously writable
-mount / -o remount,ro
 
 # Start VCbridge with default settings
 /usr/local/bin/VCbridge &
 
 # Make the midi connections
 /usr/local/bin/connect_midi
+
 exit 0
 =============================================================================
 
-Make it executable:
-$ sudo chmod +x /etc/init.d/midi_setup
 
 Build a new script for connecting the pi:
 $ sudo nano /usr/local/bin/connect_midi
@@ -119,10 +114,6 @@ aconnect 32:0 128:3
 Make it executable:
 $ sudo chmod 755 /usr/local/bin/connect_midi
 
-Add it to the start up process±
-$ sudo update-rc.d midi_setup defaults
-
-Ignore the warning about missing LSB tags and overrides.
 
 *****************************************************************************
 STEP 4: Make the midi connections reconnect when plugging in and out the usb:
