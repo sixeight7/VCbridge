@@ -82,6 +82,11 @@ Add the lines:
 # Make the midi connections
 /usr/local/bin/connect_midi
 
+# Check if the bridge really started - otherwise retry by restarting this script
+sleep 1
+if [[ ! $(pgrep -f VCbridge) ]]; then
+  /etc/init.d/midi_setup
+fi
 exit 0
 =============================================================================
 

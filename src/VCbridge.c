@@ -1,32 +1,35 @@
 /*
-    VCbridge offers four virtual ports to use with the VController
+    This file is derived of ttymidi. VCbridge offers four virtual ports for use with the VController
 
-    VCbridge is free software: you can redistribute it and/or modify
+    ttymidi is free software: you can redistribute it and/or modify
     it under the terms of the GNU General Public License as published by
     the Free Software Foundation, either version 3 of the License, or
     (at your option) any later version.
 
-    VCbridge is distributed in the hope that it will be useful,
+    ttymidi is distributed in the hope that it will be useful,
     but WITHOUT ANY WARRANTY; without even the implied warranty of
     MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
     GNU General Public License for more details.
 
     You should have received a copy of the GNU General Public License
-    along with VCbridge.  If not, see <http://www.gnu.org/licenses/>.
+    along with ttymidi.  If not, see <http://www.gnu.org/licenses/>.
 
     *********************
     Additional Info
     *********************
-    Based on my adapted ttymidi program (see https://github.com/sixeight7/ttymidi)
-	It will add four virtual USB host MIDI ports to the VController.
-	VCbridge will send and receive port change commands (MIDI CC #119 on MIDI channel 16)
+    The original ttymidi application did not support sysex messages. This version does.
+	Based it on the work of johnty/ttymidi-icubex.c (see https://gist.github.com/johnty/de8b3d3041c7ee43accd)
     
-    to compile: gcc VCbridge.c -o VCbridge -lasound -pthread
+    The other change from original ttymidi code is that the MIDI por type being created: 
+    the bit SND_SEQ_PORT_TYPE_MIDI_GENERIC was added so that the virtual port 
+    shows up when searching for ports in ofxMidi
+    
+    to compile: gcc ttymidi.c -o ttymidi -lasound -pthread
 
 	Developed on Raspbian GNU/Linux 8 (jessie)
 	
-    ttymidi is created December 2014 by Johnty Wang [johntywang@infusionsystems.com]
-	VCbridge is written March 2017 by Catrinus Feddema [aka sixeight at vguitarforums.com]
+    Created December 2014 by Johnty Wang [johntywang@infusionsystems.com]
+	Updated March 2017 by Catrinus Feddema
 */
 
 
@@ -62,8 +65,8 @@
 int run;
 int serial;
 int port_id[NUMBER_OF_PORTS];
-int inport = 0; // The current input port (0-3)
-int outport = 0; // The current output port (0-3)
+int inport = 0; // The current input port (0-4)
+int outport = 0; // The current output port (0-4)
 int prev_port = 1; // The previous input port
 
 /* --------------------------------------------------------------------- */
@@ -76,7 +79,7 @@ static struct argp_option options[] =
 	{"verbose"      , 'v', 0     , 0, "For debugging: Produce verbose output" },
 	{"printonly"    , 'p', 0     , 0, "Super debugging: Print values read from serial -- and do nothing else" },
 	{"quiet"        , 'q', 0     , 0, "Don't produce any output, even when the print command is sent" },
-	{"name"		, 'n', "NAME", 0, "Name of the Alsa MIDI client. Default = VCbridge" },
+	{"name"		, 'n', "NAME", 0, "Name of the Alsa MIDI client. Default = ttymidi" },
 	{ 0 }
 };
 
@@ -91,7 +94,7 @@ typedef struct _arguments
 void exit_cli(int sig)
 {
 	run = FALSE;
-	printf("\rVCbridge closing down ... ");
+	printf("\rttymidi closing down ... ");
 }
 
 static error_t parse_opt (int key, char *arg, struct argp_state *state)
@@ -206,14 +209,14 @@ void write_midi_action_to_serial_port(snd_seq_t* seq_handle)
 	snd_seq_event_t* ev;
 	char bytes[] = {0x00, 0x00, 0xFF};
 	char port_message[] = {0xB0|VCONTROLLER_MIDI_CHANNEL, LINE_SELECT_CC_NUMBER, 0};
-	char sysex_data[1024];
+	char sysex_data[256];
 	int sysex_len = 0;
 
 	do
 	{
 		snd_seq_event_input(seq_handle, &ev);
 
-		inport = ev->dest.port;
+		inport = ev->dest.port + 1;
 		
 		switch (ev->type)
 		{
@@ -298,11 +301,10 @@ void write_midi_action_to_serial_port(snd_seq_t* seq_handle)
 		bytes[1] = (bytes[1] & 0x7F);
 		
 		// Write a port change message if neccesary
-		if (inport != prev_port) {
+		if ((inport != prev_port) || (outport == 0)) { // We also send a port reminder when outport = 0 (OMNI)
 			prev_port = inport;
 			port_message[2] = inport;
 			write(serial, port_message, 3);
-			//printf("Midi virtual channel: %u\n", inport);
 		}
 
 		switch (ev->type) 
@@ -322,9 +324,9 @@ void write_midi_action_to_serial_port(snd_seq_t* seq_handle)
 			break;
 			
 			case SND_SEQ_EVENT_SYSEX:
+			//sysex addition - wrote this in the case statement
 				if (sysex_len > 0) {
 					write(serial, sysex_data, sysex_len);
-					//printf("Sysex written to port %u\n", inport);
 				}
 		}
 		
@@ -491,6 +493,7 @@ void* read_midi_from_serial_port(void* seq)
 {
 	char buf[BUF_SIZE], readbyte, msg[MAX_MSG_SIZE];
 	int buflen, bytesleft = BUF_SIZE - 1;
+	int p;
 
 	/* Lets first fast forward to first status byte... */
 	
@@ -536,10 +539,21 @@ void* read_midi_from_serial_port(void* seq)
 		// Check for a port change message (cc119)
 		if (buf[0] == (0xB0|VCONTROLLER_MIDI_CHANNEL) && buf[1] == LINE_SELECT_CC_NUMBER) {
 			outport = buf[2];
+			//if (!arguments.silent && arguments.verbose)
+				//printf("Serial  New outport: %u\n", outport);
 		}
 		else {
 			// Write it to the set alsa output port if the buffer contains a valid message
-			if (buf[0] & 0x80) write_midi_to_alsa(seq, port_id[outport], buf, buflen);
+			if (buf[0] & 0x80) {
+				if (outport == 0) { // Write it to all ALSA ports.
+					for (p = 0; p < NUMBER_OF_PORTS; p++) {
+						write_midi_to_alsa(seq, port_id[p], buf, buflen);
+					}
+				}
+				else { // Just write it to the port that is specified 1-4.
+					write_midi_to_alsa(seq, port_id[outport - 1], buf, buflen);
+				}
+			}
 		}		
 	}
 }
@@ -625,9 +639,9 @@ main(int argc, char** argv)
 	tcsetattr(serial, TCSANOW, &newtio);
 
 	// Linux-specific: enable low latency mode (FTDI "nagling off")
-	ioctl(serial, TIOCGSERIAL, &ser_info);
-	ser_info.flags |= ASYNC_LOW_LATENCY;
-	ioctl(serial, TIOCSSERIAL, &ser_info);
+//	ioctl(serial, TIOCGSERIAL, &ser_info);
+//	ser_info.flags |= ASYNC_LOW_LATENCY;
+//	ioctl(serial, TIOCSSERIAL, &ser_info);
 
 	if (arguments.printonly)
 	{
