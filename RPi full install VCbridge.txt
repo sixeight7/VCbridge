@@ -9,16 +9,24 @@ STEP 1: Install Jessie Lite unto the SD card
 *****************************************************************************
 
 Go to this page and download Raspbian Jessie Lite:
+I have not tested this configuration on the newer Debian version yet (called "Stretch")
 
-https://www.raspberrypi.org/downloads/raspbian/
+http://domoticx.com/raspberry-pi-sd-image-raspbian-linux-os/
+(https://www.raspberrypi.org/downloads/raspbian/ only shows the new Stretch version)
 
 Then follow the instructions here to write to SD:
 
 https://www.raspberrypi.org/documentation/installation/installing-images/README.md
 
+Connect the pi to a display via HDMI and startup.
+
 Default logon:
 user: pi
 pass: raspberry
+
+Enable the ssh service:
+# sudo service ssh start
+#sudo systemctl enable ssh
 
 Upgrade Jessie Lite to the latest version:
 $ sudo apt-get update
@@ -57,8 +65,7 @@ $ sudo systemctl disable serial-getty@ttyS0.service
 
 Install needed packages:
 $ sudo apt-get install libasound2
-$ apt-get install git 
-$ apt-get install g++
+$ sudo apt-get install git 
 
 Install VCbridge
 $ git clone https://github.com/sixeight7/VCbridge.git
@@ -78,7 +85,7 @@ Add the lines:
 
 # Start VCbridge with default settings
 /usr/local/bin/VCbridge &
-
+_setup
 # Make the midi connections
 /usr/local/bin/connect_midi
 
@@ -99,7 +106,7 @@ $ sudo update-rc.d midi_setup defaults
 Build a new script for connecting the pi:
 $ sudo nano /usr/local/bin/connect_midi
 
-Add the lines±
+Add the lines:
 =============================================================================
 #! /bin/sh
 #Remote current connections
@@ -130,26 +137,29 @@ $ sudo chmod 755 /usr/local/bin/connect_midi
 STEP 4: Make the midi connections reconnect when plugging in and out the usb:
 *****************************************************************************
 
-First run lsusb to identify your device. Example:
-
 $ sudo nano /etc/udev/rules.d/68-midi_connect.rules
 
 And add the lines:
 =============================================================================
-#Run script on connection of any USB device
-ACTION=="add", RUN+="/usr/local/bin/connect_midi"
+#Run script on connection of all music related USB devices
+ACTION=="add", KERNEL=="controlC[0-9]*", DRIVERS=="usb",  RUN+="/usr/local/bin/connect_midi"
+ACTION=="add", KERNEL=="hwC[D0-9]*", DRIVERS=="usb",  RUN+="/usr/local/bin/connect_midi"
+ACTION=="add", KERNEL=="midiC[D0-9]*", DRIVERS=="usb",  RUN+="/usr/local/bin/connect_midi"
+ACTION=="add", KERNEL=="pcmC[D0-9cp]*", DRIVERS=="usb",  RUN+="/usr/local/bin/connect_midi"
 =============================================================================
 
-This script will reconnect midi when you plug in any USB device to the RPi.
-This way the bridge will support almost all MIDI devices instantly.
+This script will connect with pretty much any music related interface.
+Source: http://alsa.opensrc.org/Udev
 
-5. Change owner and reload udevadm±
+Change owner and reload udevadm:
 $ sudo chown root:root /etc/udev/rules.d/68-midi_connect.rules
 $ sudo udevadm control --reload
 
 *****************************************************************************
 STEP 5: Make the filesystem readonly to avoid corruption
 *****************************************************************************
+Source: http://www.vguitarforums.com/smf/index.php?topic=12067.msg88038#msg88038
+Thanks Gumtown!
 
 $ sudo nano /etc/fstab
 
@@ -183,3 +193,26 @@ Now you do need to shutdown or reboot the system properly after the edit:
 $ sudo shutdown now
 
 $ sudo reboot now
+
+*****************************************************************************
+STEP 6: Created clone on second microSD card
+*****************************************************************************
+
+Connect an sd card in a card reader to the Raspberry Pi
+
+$ git clone https://github.com/billw2/rpi-clone.git
+sud
+
+$ sudo cp rpi-clone/rpi-clone /usr/local/sbin
+
+Check if sda exists:
+
+$ sudo fdisk -l
+
+Reboot now to make sure the disk is read only - otherwise it will become very slow at bootup!
+
+Make the clone:
+
+$ sudo rpi-clone sda -f
+
+Answer yes to all questions. You can skip entering a name for a label.
