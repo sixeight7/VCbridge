@@ -73,6 +73,14 @@ $ cd VCbridge
 $ make
 $ sudo make install
 
+Download and copy llctl.tgz from https://www.raspberrypi.org/forums/viewtopic.php?t=72070
+We use this tool to control the LEDs of the LAN connector
+$ sudo apt-get install libusb-dev
+$ git clone https://github.com/nateober/RaspberryPI.git
+$ cd RaspberryPI/llctl/ 
+$ sudo make
+$ sudo cp llctl /usr/bin/
+
 *****************************************************************************
 STEP 3: Create a startup script for midi:
 *****************************************************************************
@@ -93,6 +101,9 @@ _setup
 sleep 1
 if [[ ! $(pgrep -f VCbridge) ]]; then
   /etc/init.d/midi_setup
+else
+  # Switch link LED on
+  llctl l1
 fi
 exit 0
 =============================================================================
