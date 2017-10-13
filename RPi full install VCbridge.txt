@@ -1,4 +1,4 @@
-*****************************************************************************
+ls*****************************************************************************
 VCbridge full installation instructions
 *****************************************************************************
 
@@ -152,11 +152,8 @@ $ sudo nano /etc/udev/rules.d/68-midi_connect.rules
 
 And add the lines:
 =============================================================================
-#Run script on connection of all music related USB devices
-ACTION=="add", KERNEL=="controlC[0-9]*", DRIVERS=="usb",  RUN+="/usr/local/bin/connect_midi"
-ACTION=="add", KERNEL=="hwC[D0-9]*", DRIVERS=="usb",  RUN+="/usr/local/bin/connect_midi"
-ACTION=="add", KERNEL=="midiC[D0-9]*", DRIVERS=="usb",  RUN+="/usr/local/bin/connect_midi"
-ACTION=="add", KERNEL=="pcmC[D0-9cp]*", DRIVERS=="usb",  RUN+="/usr/local/bin/connect_midi"
+#Run script on connection of all USB devices
+ACTION=="add", SUBSYSTEM=="usb", DRIVERS=="usb", RUN+="/usr/local/bin/connect_midi"
 =============================================================================
 
 This script will connect with pretty much any music related interface.
