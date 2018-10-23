@@ -67,7 +67,7 @@ int serial;
 int port_id[NUMBER_OF_PORTS];
 int inport = 0; // The current input port (0-4)
 int outport = 0; // The current output port (0-4)
-int prev_port = 1; // The previous input port
+int prev_port = 0; // The previous input port
 
 /* --------------------------------------------------------------------- */
 // Program options
@@ -563,7 +563,7 @@ void* read_midi_from_serial_port(void* seq)
 /* --------------------------------------------------------------------- */
 // Main program
 
-main(int argc, char** argv)
+int main(int argc, char** argv)
 {
 	//arguments arguments;
 	struct termios oldtio, newtio;

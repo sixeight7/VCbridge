@@ -1,18 +1,19 @@
-ls*****************************************************************************
+*****************************************************************************
 VCbridge full installation instructions
 *****************************************************************************
 
 Follow these instructions to install VCbridge unto a Raspberry Pi
 
 *****************************************************************************
-STEP 1: Install Jessie Lite unto the SD card
+STEP 1: Install Jessie Lite or Stretch lite unto the SD card
 *****************************************************************************
 
-Go to this page and download Raspbian Jessie Lite:
-I have not tested this configuration on the newer Debian version yet (called "Stretch")
+Go to this page and download Raspbian Jessie or Stretch Lite:
 
 http://domoticx.com/raspberry-pi-sd-image-raspbian-linux-os/
 (https://www.raspberrypi.org/downloads/raspbian/ only shows the new Stretch version)
+
+Both Jessie lite on a Raspberry Pi model B+ and Stretch lite on a Raspberry Pi model 3B have been tested.
 
 Then follow the instructions here to write to SD:
 
@@ -40,13 +41,26 @@ STEP 2: Install VCbridge
 
 $ sudo nano /boot/config.txt
 
-Add these lines to the bottom of config.txt file:
+Add these lines to the bottom of config.txt file for raspberry pi model 1b+:
 =============================================================================
 init_uart_clock=2441406
 init_uart_baud=38400
 dtparam=uart0_clkrate=3000000
 enable_uart=1
 =============================================================================
+
+For raspberry pi model 3 we add these lines instead:
+=============================================================================
+enable_uart=1
+dtoverlay=pi3-disable-bt
+dtoverlay=midi-uart0
+=============================================================================
+
+And we also must stop the bt modem from using the uart by typing:
+sudo systemctl disable hciuart
+
+Once the filesystem is read-only, you may have to set the /boot partition to rw before you can save the changes to /boot/config.txt:
+$ sudo mount -o remount,rw /boot
 
 2) Disable the pi's shell from accesing the UART
 
@@ -65,6 +79,7 @@ $ sudo systemctl disable serial-getty@ttyS0.service
 
 Install needed packages:
 $ sudo apt-get install libasound2
+$ sudo apt-get install libasound2-dev
 $ sudo apt-get install git 
 
 Install VCbridge
@@ -90,12 +105,22 @@ $ sudo nano /etc/init.d/midi_setup
 Add the lines:
 =============================================================================
 #!/bin/bash
+### BEGIN INIT INFO
+# Provides:          VCbridge
+# Required-Start:    $local_fs alsasound
+# Required-Stop:     $local_fs
+# Default-Start:     2 3 4 5
+# Default-Stop:      0 1 6
+# Short-Description: VCbridge service
+# Description:       Run VCbridge service
+### END INIT INFO
 
 # Start VCbridge with default settings
 /usr/local/bin/VCbridge &
-_setup
+
 # Make the midi connections
 /usr/local/bin/connect_midi
+
 
 # Check if the bridge really started - otherwise retry by restarting this script
 sleep 1
@@ -104,7 +129,9 @@ if [[ ! $(pgrep -f VCbridge) ]]; then
 else
   # Switch link LED on
   llctl l1
+  /usr/local/bin/connect_midi
 fi
+
 exit 0
 =============================================================================
 
@@ -192,6 +219,9 @@ echo
 echo "Disk sytem is now R/W -  do not power off - USE 'sudo shutdown -h now'"
 =============================================================================
 
+Make it executable:
+$ sudo chmod 755 /usr/local/bin/quit
+
 So every time you need to edit something on the RPi, you first type:
 
 $ quit
@@ -209,7 +239,6 @@ STEP 6: Created clone on second microSD card
 Connect an sd card in a card reader to the Raspberry Pi
 
 $ git clone https://github.com/billw2/rpi-clone.git
-sud
 
 $ sudo cp rpi-clone/rpi-clone /usr/local/sbin
 
